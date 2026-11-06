@@ -1920,17 +1920,22 @@
         renderSlip(); renderHome(); renderLive(); renderFootball(); renderSport(); renderMatch();
       }
       function placeBets(){
-        const t = slipTotals();
         if (!state.slip.length) return;
         if (state.slip.some(selSusp)) { toast('A selection is suspended — remove it first.', false); return; }
         if (state.slip.some(selChanged)) { toast('Accept the new odds before placing.', false); return; }
+        /* a selection with no stake on it is not a bet: it stays on the slip
+           for editing instead of being placed as a 0.00 USDT single that
+           clutters My Bets with a worthless cash-out */
+        const entries = state.slip.filter(s => Math.max(0, parseFloat(s.stake) || 0) > 0);
+        if (!entries.length){ toast('Add a stake to at least one selection first.', false); return; }
+        const t = {stake: 0, ret: 0};
+        entries.forEach(s => { const st = Math.max(0, parseFloat(s.stake) || 0); t.stake += st; t.ret += st * s.price; });
         if (t.stake > state.balance){
           state.slipPhase = 'failed';
           state.failReason = 'Insufficient balance. Your slip needs ' + fmt(t.stake) + ' USDT but the demo balance is ' + fmt(state.balance) + ' USDT. Lower a stake and try again — no funds were taken.';
           renderSlip(); return;
         }
         state.slipPhase = 'placing'; renderSlip();
-        const entries = state.slip.slice();
         setTimeout(() => {
           const ids = [];
           entries.forEach(s => {
@@ -1942,7 +1947,7 @@
           });
           state.balance -= t.stake;
           state.lastReceipt = {count: entries.length, stake: t.stake, ret: t.ret, ids};
-          state.slip = [];
+          state.slip = state.slip.filter(s => entries.indexOf(s) === -1);
           state.slipPhase = 'placed';
           state.betsTab = 'open';
           renderSlip(); renderBets(); renderHome(); renderLive(); renderFootball(); renderSport(); renderMatch();
